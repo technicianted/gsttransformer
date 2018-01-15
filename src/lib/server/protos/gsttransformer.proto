@@ -1,0 +1,141 @@
+/*
+
+Copyright 2018 technicianted
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+*/
+
+syntax = "proto3";
+
+package gst_transformer.service;
+
+// client metadata enumeration for keys
+enum ClientMetadata {
+    // required. request identification, used in logging.
+    requestid = 0;
+}
+// Determine how the service enforces rate violation.
+enum RateEnforcementPolicy {
+    // block call until rate is restored. 
+    BLOCK = 0;
+    // terminate the call with error.
+    ERROR = 1;
+}
+
+// call termination reason
+enum TerminationReason {
+    // reason is unknown
+    NONE = 0;
+    // pipeline faced an internal error
+    INTERNAL_ERROR = 1;
+    // stream finished processing until the end
+    END_OF_STREAM = 2;
+    // no format was detected and stream hasn't started
+    FORMAT_NOT_DETECTED = 3;
+    // allowed maximum duration of media exceeded
+    ALLOWED_DURATION_EXCEEDED = 4;
+    // data rate exceeded, measured vs realtime
+    RATE_EXCEEDED = 5;
+    // timeout waiting for media data
+    READ_TIMEOUT = 6;
+    // stream has not started after maximum time
+    STREAM_START_TIMEOUT = 7;
+    // pipeline execution was cancelled
+    CANCELLED = 8;
+}
+
+// Parameters for the GStreamer pipeline.
+message PipelineParameters {
+    // pipeline output rate. must be > 0.0. -1 is maximum. 1.0 is realtime.
+    double rate = 1;
+    // how to enforce caller rate violation.
+    RateEnforcementPolicy rate_enforcement_policy = 2;
+    // maximum media duration to process in milliseconds. 
+    uint32 length_limit_milliseconds = 3;
+    // maximum number of bytes to process until pipeline starts.
+    // used to abort streams with unknown formats.
+    uint32 start_tolerance_bytes = 4;
+    // maximum time in milliseconds to wait for the next media payload.
+    uint32 read_timeout_millseconds = 5;
+}
+
+// Transformation configuration. Must be first payload in the call.
+message TransformConfig {
+    // request pipeline by name. pipeline must have been already defined on server.
+    string pipeline_name = 1;
+    // specifiy GStreamer pipeline without source and sink, in gst-launch format.
+    string pipeline = 2;
+    // how many output bytes to buffer before sending response back to client.
+    // larger buffer decrease grpc overhead but introduces latency.
+    uint32 pipeline_output_buffer = 3;
+
+    PipelineParameters pipeline_parameters = 16;
+}
+
+// Data payload.
+message Payload {
+    repeated bytes data = 1;
+}
+
+// Request to transform media.
+// First message must be config followed by one or more payload.
+message TransformRequest {
+    oneof request {
+        TransformConfig config = 1;
+        Payload payload = 8;
+    }
+}
+
+// last response message sent back to client containing
+// a report about the call
+message TransformCompleted {
+    // reason of stream processing end
+    TerminationReason termination_reason = 1;
+    // description of termination_reason
+    string termination_message = 2;
+
+    // number of bytes processed by the pipeline
+    uint64 processed_input_bytes = 8;
+    // number of bytes outputted by the pipeline
+    uint64 processed_output_bytes = 9;
+    // seconds of processed media outputted by pipeline
+    double processed_time = 10;
+    // number of bytes consumed back by the client
+    uint64 consumed_output_bytes = 11;
+}
+
+// Media transform response message
+// contains zero or more payload and one last transform_completed
+message TransformResponse {
+    oneof response {
+        Payload payload = 1;
+        TransformCompleted transform_completed = 4;
+    }
+}
+
+message TransformProducerResponse {
+    string consumer_request_id = 1;
+}
+
+message TransformConsumerRequest {
+    string consumer_request_id = 1;
+}
+
+service GstTransformer {
+    // Request to do media tranformation and optionally specify pipeline per request.
+    rpc Transform(stream TransformRequest) returns (stream TransformResponse) {}
+    // Request to do media transformation in separate producer consumer call.
+    rpc TransformProducer(stream TransformRequest) returns (TransformProducerResponse) {}
+    // Request to do media transformation in separate producer consumer call.
+    rpc TransformConsumer(TransformConsumerRequest) returns (stream TransformResponse) {}
+}
+
