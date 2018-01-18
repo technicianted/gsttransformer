@@ -30,19 +30,22 @@ all copies or substantial portions of the Software.
 #include <grpc++/security/server_credentials.h>
 
 #include "serviceimpl.h"
+#include "servercli.h"
+#include "serviceparams.h"
+using namespace gst_transformer::service;
 
-GST_DEBUG_CATEGORY(appsrc_pipeline_debug);
-#define GST_CAT_DEFAULT appsrc_pipeline_debug
-
-void runServer(const std::string &endpoint)
+void runServer(const std::string &endpoint, const ServiceParams &params)
 {
-    spdlog::set_level(spdlog::level::debug);
-    gst_transformer::service::ServiceImpl service;
+    gst_transformer::service::ServiceImpl service(params);
 
     ::grpc::ServerBuilder builder;
     builder.AddListeningPort(endpoint, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
     std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());
+    if (!server) {
+        std::cout << "Unable to build service" << std::endl;
+        exit(2);
+    }
     std::cout << "Server listening on " << endpoint << std::endl;
     server->Wait();
 }
@@ -51,7 +54,21 @@ int main(int argc, char **argv)
 {
     gst_init (&argc, &argv);
 
-    GST_DEBUG_CATEGORY_INIT(appsrc_pipeline_debug, "appsrc-pipeline", 0, "gst-transformer");
+    if (parse_opt(argc, argv) == -1) {
+        usage();
+    }
 
-    runServer(argv[1]);
+    ServiceParams params;
+    if (!configurationFile.empty()) {
+        params.loadFromJsonFile(configurationFile);
+    }
+
+    for(unsigned int i=0; i<sizeof(spdlog::level::level_names); i++) {
+        if (logLevel == spdlog::level::level_names[i]) {
+            spdlog::set_level((spdlog::level::level_enum)i);
+            break;
+        }
+    }
+
+    runServer(endpoint, params);
 }

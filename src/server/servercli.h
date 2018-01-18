@@ -14,19 +14,16 @@ all copies or substantial portions of the Software.
 
 */
 
-#ifndef __CLIENTCLI_H__
-#define __CLIENTCLI_H__
+#ifndef __SERVERCLI_H__
+#define __SERVERCLI_H__
 
-#include "gsttransformer.grpc.pb.h"
+#include <string>
 
-using namespace gst_transformer::service;
-
-extern TransformConfig transformConfig;
-extern std::ifstream inputFileStream;
-extern std::ofstream outputFileStream;
+extern std::string logLevel;
+extern std::string configurationFile;
 extern std::string endpoint;
 
-int parse_opt(int argc, char **argv, bool);
+int parse_opt(int argc, char **argv);
 void usage();
 
 #endif

@@ -19,11 +19,39 @@ all copies or substantial portions of the Software.
 
 #include "pipeline.h"
 #include "gsttransformer.pb.h"
+#include "serviceparameters.pb.h"
 
+namespace gst_transformer {
+namespace service {
+
+/**
+ * Factory class to create pipelines from gst-launch specs.
+ * It also handles predefined pipelines that can be referenced by name.
+ */
 class ServerPipelineFactory
 {
 public:
-    Pipeline * get(const std::string &requestId, const gst_transformer::service::TransformConfig &config);
+    /**
+     * Construct a new factory.
+     * 
+     * \param: serviceParams Service parameters used when creating pipelines.
+     */
+    ServerPipelineFactory(const ServiceParametersStruct &serviceParams);
+    /**
+     * Obtain a pipeline instance. It can be a predefined pipeline, or a dynamic
+     * one created from gst specs in the request config.
+     * 
+     * \param requestId the request ID for logging.
+     * \param config request parameters.
+     * \return a pipeline instance ready for use.
+     */
+    Pipeline * get(const std::string &requestId, const TransformConfig &config);
+
+private:
+    ServiceParametersStruct serviceParams;
 };
+
+}
+}
 
 #endif

@@ -19,7 +19,7 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 	auto pipelineConfig = transformConfig.mutable_pipeline_parameters();
 
 	int key;
-	while ((key = getopt(argc, argv, "+e:r:l:i:o:s:")) != -1) {
+	while ((key = getopt(argc, argv, "+e:r:l:b:i:o:s:p:")) != -1) {
 		switch (key) {
 			case 'e':
 				if (!strcmp(optarg, "block"))
@@ -47,6 +47,12 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 				pipelineConfig->set_length_limit_milliseconds(maxLen);
 				break;
 			}
+			case 'b':
+			{
+				unsigned int buffer = strtoul(optarg, NULL, 10);
+				transformConfig.set_pipeline_output_buffer(buffer);
+				break;
+			}
 			case 'i':
 				inputFileName = optarg;
 				break;
@@ -55,6 +61,9 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 				break;
 			case 's':
 				transformConfig.set_pipeline(optarg);
+				break;
+			case 'p':
+				transformConfig.set_pipeline_name(optarg);
 				break;
 		}
 	}
@@ -65,8 +74,13 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 		endpoint = argv[optind];
 	}
 
-	if (transformConfig.pipeline().empty()) {
-		std::cerr << "Pipeline specs (-s) is required." << std::endl;
+	if (transformConfig.pipeline().empty() && transformConfig.pipeline_name().empty()) {
+		std::cerr << "Pipeline specs (-s) or name (-p) is required." << std::endl;
+		return -1;
+	}
+
+	if (!transformConfig.pipeline().empty() && !transformConfig.pipeline_name().empty()) {
+		std::cerr << "Pipeline specs (-s) and name (-p) cannot be both set." << std::endl;
 		return -1;
 	}
 
@@ -86,13 +100,15 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 
 void usage()
 {
-	std::cerr << "Usage: gst-transformer-client [OPTION...] [<endpoint>]" << std::endl;
+	std::cerr << "Usage: gsttransformerclient [OPTION...] [<endpoint>]" << std::endl;
 	std::cerr << "  -e MODE\tRate enforcement mode {BLOCK|ERROR}. Default BLOCK." << std::endl;
 	std::cerr << "  -r RATE\tTransformation rate in double: 1.0 = RT, -1 passthrough. Default 1.0." << std::endl;
 	std::cerr << "  -l LEN\tSet maximum audio duration in milliseconds, 0 unlimited. Default 0." << std::endl;
+	std::cerr << "  -b BUFFER\tSet pipeline output buffer size. Default 0 (no buffering)." << std::endl;
 	std::cerr << "  -i FILE\tInput file. Default stdin." << std::endl;
 	std::cerr << "  -o FILE\tOutput file. Default stout." << std::endl;
 	std::cerr << "  -s SPECS\tGStream pipeline specs." << std::endl;
+	std::cerr << "  -p PIPELINE\tExisting pipeline name as defined on the server." << std::endl;
 
     exit(1);
 }

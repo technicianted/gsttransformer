@@ -76,7 +76,7 @@ std::string DynamicPipeline::getTerminationMessage() const
 unsigned long DynamicPipeline::getProcessedInputBytes() const
 {
     // TODO: this counts bytes including currently queued in appsrc
-    return this->totalBytesWritten;
+    return this->totalBytesRead;
 }
 
 unsigned long DynamicPipeline::getProcessedOutputBytes() const

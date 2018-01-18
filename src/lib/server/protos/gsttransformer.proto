@@ -65,7 +65,7 @@ message PipelineParameters {
     // used to abort streams with unknown formats.
     uint32 start_tolerance_bytes = 4;
     // maximum time in milliseconds to wait for the next media payload.
-    uint32 read_timeout_millseconds = 5;
+    uint32 read_timeout_milliseconds = 5;
 }
 
 // Transformation configuration. Must be first payload in the call.

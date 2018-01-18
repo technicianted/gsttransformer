@@ -14,19 +14,25 @@ all copies or substantial portions of the Software.
 
 */
 
-#ifndef __CLIENTCLI_H__
-#define __CLIENTCLI_H__
+#ifndef __SERVICEPARAMS_H__
+#define __SERVICEPARAMS_H__
 
-#include "gsttransformer.grpc.pb.h"
+#include "serviceparameters.pb.h"
 
-using namespace gst_transformer::service;
+namespace gst_transformer {
+namespace service {
 
-extern TransformConfig transformConfig;
-extern std::ifstream inputFileStream;
-extern std::ofstream outputFileStream;
-extern std::string endpoint;
+class ServiceParams : public ServiceParametersStruct
+{
+public:
+    ServiceParams();
 
-int parse_opt(int argc, char **argv, bool);
-void usage();
+    void loadFromJsonStream(std::istream &stream);
+    void loadFromJsonString(const std::string &json);
+    void loadFromJsonFile(const std::string &json);
+};
+
+}
+}
 
 #endif

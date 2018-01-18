@@ -7,9 +7,11 @@
 namespace gst_transformer {
 namespace service {
 
-ServiceImpl::ServiceImpl()
+ServiceImpl::ServiceImpl(const ServiceParametersStruct &params) : factory(params)
 {
     this->globalLogger = spdlog::stderr_logger_mt("serviceimpl");
+    this->params = params;
+    this->globalLogger->info("starting service with params:\n{0}", params.DebugString());
 }
 
 ::grpc::Status ServiceImpl::Transform(
@@ -24,7 +26,8 @@ ServiceImpl::ServiceImpl()
         return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, message);
     }
 
-    std::string requestId = iterator->second.data();
+    std::string requestId = std::string(iterator->second.data(), iterator->second.size());
+    this->globalLogger->debug("request ID {0}", requestId);
     // TODO: not ideal but convenient. global lock.
     auto logger = spdlog::stderr_logger_mt(fmt::format("serviceimpl.Transform/{0}", requestId));
 
@@ -36,9 +39,28 @@ ServiceImpl::ServiceImpl()
     }
 
     auto config = request.config();
-    logger->debug("config: {0}", config.ShortDebugString());
     auto params = config.pipeline_parameters();
-    std::unique_ptr<Pipeline> pipeline(factory.get(requestId, config));
+    logger->debug("request config {0}", config.ShortDebugString());
+    try {
+    this->validateConfig(config);
+    }
+    catch(std::exception &e) {
+        auto message = fmt::format("invalid config: {0}", e.what());
+        logger->notice(message);
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, message);
+    }
+    logger->debug("request config with limits applied {0}", config.ShortDebugString());
+
+    std::shared_ptr<Pipeline> pipeline;
+    try {
+        pipeline.reset(factory.get(requestId, config));
+    }
+    catch(std::exception &e) {
+        auto message = fmt::format("cannot create pipeline: {0}", e.what());
+        logger->notice(message);
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, message);
+    }
+
     TransformResponse response;
     unsigned int bufferedSize = 0;
     int totalWrites = 0;
@@ -117,6 +139,53 @@ ServiceImpl::ServiceImpl()
     ::grpc::ServerWriter< ::gst_transformer::service::TransformResponse>* writer)
 {
     return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "Not implemented");
+}
+
+void ServiceImpl::validateConfig(TransformConfig &transformConfig)
+{
+    auto pipelineParams = transformConfig.pipeline_parameters();
+
+    if (!transformConfig.pipeline().empty() && !this->params.allow_dynamic_pipelines())
+        throw std::invalid_argument("dynamic pipelines in requests are disabled");
+    
+    if (this->params.max_rate() != 0 && this->params.max_rate() != -1) {
+        if (pipelineParams.rate() > this->params.max_rate() || pipelineParams.rate() == -1)
+            throw std::invalid_argument(
+                fmt::format("requested rate {0} exceeds allowed max rate {1}", 
+                pipelineParams.rate(), 
+                this->params.max_rate()));
+    }
+    if (this->params.max_length_millis() != 0) {
+        if (pipelineParams.length_limit_milliseconds() > this->params.max_length_millis())
+            throw std::invalid_argument(
+                fmt::format("requested length limit {0} exceeds allowed max {1}",
+                pipelineParams.length_limit_milliseconds(),
+                this->params.max_length_millis()));
+        transformConfig.mutable_pipeline_parameters()->set_length_limit_milliseconds(this->params.max_length_millis());
+    }
+    if (this->params.max_start_tolerance_bytes() != 0) {
+        if (pipelineParams.start_tolerance_bytes() > this->params.max_start_tolerance_bytes())
+            throw std::invalid_argument(
+                fmt::format("requested start tolerance bytes {0} exceeds allowed max {1}",
+                pipelineParams.start_tolerance_bytes(),
+                this->params.max_start_tolerance_bytes()));
+        transformConfig.mutable_pipeline_parameters()->set_start_tolerance_bytes(this->params.max_start_tolerance_bytes());
+    }
+    if (this->params.max_read_timeout_millis() != 0) {
+        if (pipelineParams.read_timeout_milliseconds() > this->params.max_read_timeout_millis())
+            throw std::invalid_argument(
+                fmt::format("requested read timeout {0} exceeds allowed max {1}",
+                pipelineParams.read_timeout_milliseconds(),
+                this->params.max_read_timeout_millis()));
+        transformConfig.mutable_pipeline_parameters()->set_read_timeout_milliseconds(this->params.max_read_timeout_millis());
+    }
+    if (this->params.max_pipeline_output_buffer() != 0) {
+        if (transformConfig.pipeline_output_buffer() > this->params.max_pipeline_output_buffer()) 
+            throw std::invalid_argument(
+                fmt::format("requested pipeline output buffer {0} exceeds allowed max {1}",
+                transformConfig.pipeline_output_buffer(),
+                this->params.max_pipeline_output_buffer()));
+    }
 }
 
 }

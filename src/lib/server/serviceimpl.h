@@ -20,15 +20,26 @@ all copies or substantial portions of the Software.
 #include <spdlog/spdlog.h>
 
 #include "gsttransformer.grpc.pb.h"
+#include "serviceparameters.pb.h"
 #include "serverpipelinefactory.h"
 
 namespace gst_transformer {
 namespace service {
 
+/**
+ * Concrete implementation of the service.
+ * 
+ * This implementation uses sync gRPC.
+ */
 class ServiceImpl : public GstTransformer::Service
 {
 public:
-    ServiceImpl();
+    /**
+     * Construct a new instance with service parameters.
+     * 
+     * \param param service parameters used to define this RPC.
+     */
+    ServiceImpl(const ServiceParametersStruct &params);
     
     ::grpc::Status Transform(
         ::grpc::ServerContext* context, 
@@ -45,6 +56,9 @@ public:
 private:
     std::shared_ptr<spdlog::logger> globalLogger;
     ServerPipelineFactory factory;
+    ServiceParametersStruct params;
+
+    void validateConfig(TransformConfig &transformConfig);
 };
 
 }

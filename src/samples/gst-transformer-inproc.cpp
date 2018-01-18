@@ -47,7 +47,10 @@ int main(int argc, char **argv)
     std::shared_ptr<spdlog::logger> logger = spdlog::stderr_logger_mt("inproc");
     spdlog::set_level(spdlog::level::debug);
 
-    gst_transformer::service::ServiceImpl service;
+    // default parameters = unlimited
+    ServiceParametersStruct params;
+    params.set_allow_dynamic_pipelines(true);
+    gst_transformer::service::ServiceImpl service(params);
     ::grpc::ServerBuilder builder;
     builder.RegisterService(&service);
     std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());

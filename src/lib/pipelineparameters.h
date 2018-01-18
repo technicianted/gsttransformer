@@ -24,6 +24,9 @@ enum class RateEnforcementPolicy {
     ERROR = 1
 };
 
+/**
+ * Wrapper for pipeline parameters.
+ */
 class PipelineParameters
 {
 public:

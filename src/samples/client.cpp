@@ -41,9 +41,10 @@ void transform(
     request.mutable_config()->CopyFrom(config);
     requestStream->Write(request);
 
+    unsigned int readCount = 0;
     bool readStreamClosed = false;
     TransformCompleted transformCompleted;
-    std::thread readerThread([&requestStream, &readStreamClosed, &transformCompleted, &of]{
+    std::thread readerThread([&requestStream, &readCount, &readStreamClosed, &transformCompleted, &of]{
         TransformResponse response;
         while(requestStream->Read(&response)) {
             if (response.has_payload()) {
@@ -52,6 +53,7 @@ void transform(
                     auto data = payloads.data(i);
                     of.write(data.data(), data.size());
                 }
+                readCount++;
             }
             else if (response.has_transform_completed()) {
                 transformCompleted.CopyFrom(response.transform_completed());
@@ -76,7 +78,8 @@ void transform(
     
     requestStream->WritesDone();
     readerThread.join();
-    ::grpc::Status status = requestStream->Finish();
+    logger->debug("finished reading, count {0}", readCount);
 
-    logger->info("status: {0} - '{1}', completion: {2}", status.error_code(), status.error_message(), transformCompleted.ShortDebugString());
+    ::grpc::Status status = requestStream->Finish();
+    logger->info("status: {0} - '{1}', completion:\n{2}", status.error_code(), status.error_message(), transformCompleted.DebugString());
 }
