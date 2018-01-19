@@ -6,19 +6,19 @@ Since gRPC clients can be generated in many programming lagnuages and platforms,
 
 ## Features
 
-* ### Embeddable library, in-proc, Unix domain or TCP gRPC API
+* #### Embeddable library, in-proc, Unix domain or TCP gRPC API
 
 You can use `gsttransformer` has a simple library, as an in-proc gRPC in the same process, as a service over different process Unix socket, or as a service over remote TCP connections. All using simple and platform supported gRPC.
 
-* ### Flexible media processing pipelines
+* #### Flexible media processing pipelines
 
 Using `gst-launch` declarative media pipelines, you can either preset your pipelines or even specify them on per-call basis.
 
-* ### Stream sanitization and format enforcement
+* #### Stream sanitization and format enforcement
 
 GStreamer is a very stable and powerful media processing framework. You have all the freedom to construct your pipelines in such a way to enforce formats, do sanitation and much more.
 
-* ### Processing flow control, duration, rate control and stream QoS
+* #### Processing flow control, duration, rate control and stream QoS
 
 It is often the case that you want to enforce certain characteristics on how you process your media. For example, you want your pipeline to process at maximum of 1.0 Real Time speech. This allows you to manage maximum resource consumption.
 
@@ -28,7 +28,7 @@ It is often the case that you want to enforce certain characteristics on how you
 
 `gsttransformer` can be used in different ways:
 
-* ### As a service ([`gst-transformer.cpp`]())
+* #### As a service ([`gst-transformer.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/server/gst-transformer.cpp))
 
 1. Unix domain socket:
 ```bash
@@ -59,7 +59,7 @@ docker run --rm -it \
 ```
 
 Client:
-1. Example C++ (`[gst-transformer-client.cpp]()`)
+1. Example C++ ([`gst-transformer-client.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/samples/gst-transformer-client.cpp))
 ```bash
 # convert input video to ogg/theora at 1fps at maximum 5xrealtime rate
 # connect to service at unix domain socket /var/run/gsttransformer.sock
@@ -71,7 +71,7 @@ Client:
     unix:///var/run/gsttransformer.sock
 ```
 
-* ### As an in-proc gRPC for your app process ([`gst-transformer-inproc.cpp`]())
+* #### As an in-proc gRPC for your app process ([`gst-transformer-inproc.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/samples/gst-transformer-inproc.cpp))
 ```bash
 # convert input video to ogg/theora at 1fps at maximum 5xrealtime rate
 # connect to in-proc service
@@ -81,11 +81,11 @@ Client:
     -o output.ogv
 ```
 
-* ### As an embedded shared library for your app process (C++ only)
+* #### As an embedded shared library for your app process (C++ only)
 
 In this mode, you simply link and use `gsttransformer.so` and use `DynamicPipeline` directly.
 
-* ### Sample service configurations [`sampleconfig.json`]():
+* #### Sample service configurations [`sampleconfig.json`]():
 ```json
 {
     "limits": {
@@ -141,26 +141,26 @@ In this mode, you simply link and use `gsttransformer.so` and use `DynamicPipeli
 
 If you have a service that relies or works with media, then you would face at least one of the two challenges:
 
-### 1. Variability and variety of media formats and codecs
+#### 1. Variability and variety of media formats and codecs
 
 Handling media processing is often challenging due to the amount of different formats, codecs and other nuiances such as timing, rate, etc. In addition, if you are an externally exposed service, you will have to deal with bad formats and misbehaving clients.
 
 This framework provides a standalone way of deligating all this work to an separate service. All you have to do is manage the interfacing.
 
-### 2. Scalability
+#### 2. Scalability
 
 Although you can link agains `gsttransformer` library directly to embed in your apps, this creates a stong coupling between scalability of media handling and the scalability of your core service.
 
 This is often undesirable: Typically you want service components handling different aspects to be scaled independently, especially if their resource requirements are different.
 
-### 3. Isolation of resources
+#### 3. Isolation of resources
 
 Media handling usually involves intensive CPU and potentially memory. If your service heavily relies on media processing, then you will want to run it in isolation to be able to control its resources without affecting the main service.
 
 ## Some use-cases
 
-### 1. Media processing as a service
+* #### Media processing as a service
 
-### 2. Media normalization as a service
+* #### Media normalization as a service
 
-### 3. Audio and video processing adaptors/side-cars
+* #### Audio and video processing adaptors/side-cars
