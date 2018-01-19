@@ -2,18 +2,23 @@
     "limits": {
         "allowDynamicPipelines":true,
         "rate":{
+            "description":"clients are request any processing rate",
             "max":-1
         },
         "lengthLimitMillis":{
+            "description":"clients can process media of any length",
             "max":0
         },
         "startToleranceBytes":{
+            "description":"pipeline must start before consuming first 10000 bytes",
             "max":10000
         },
         "readTimeoutMillis":{
+            "description":"clients can specify read timeout of maximum 5 seconds",
             "max":5000
         },
         "pipelineOutputBuffer":{
+            "description":"clients can request output buffering of up to 1MB",
             "max":1000000
         }
     },
@@ -21,19 +26,23 @@
     "pipelines": [
         {
             "id":"ogg_vorbis/pcm_16le_16khz_mono",
-            "specs":"oggdemux ! vorbisdec ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,channels=1,rate=16000"
+            "specs":"oggdemux ! vorbisdec ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,channels=1,rate=16000",
+            "description":"ogg/vorbis audio input to pcm16khz16le"
         },
         {
             "id":"flac/ogg_vorbis",
-            "specs":"flacdec ! audioconvert ! vorbisenc ! oggmux"
+            "specs":"flacdec ! audioconvert ! vorbisenc ! oggmux",
+            "description":"encode flac audio to ogg/vorbis"
         },
         {
             "id":"audio/pcm_16le_16khz_mono",
-            "specs":"decodebin ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,channels=1,rate=16000"
+            "specs":"decodebin ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,channels=1,rate=16000",
+            "description":"normalize any audio to pcm16khz16le"
         },
         {
             "id":"video/ogg_theora_256k_1fp",
-            "specs":"decodebin ! videorate ! video/x-raw,framerate=1/1 ! timeoverlay halignment=right valignment=top ! clockoverlay halignment=left valignment=top ! theoraenc bitrate=256 ! oggmux"
+            "specs":"decodebin ! videorate ! video/x-raw,framerate=1/1 ! timeoverlay halignment=right valignment=top ! clockoverlay halignment=left valignment=top ! theoraenc bitrate=256 ! oggmux",
+            "description":"normalize any video to 1fps with time, duration to ogg/theora"
         }
     ]
 }

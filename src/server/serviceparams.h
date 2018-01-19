@@ -22,13 +22,31 @@ all copies or substantial portions of the Software.
 namespace gst_transformer {
 namespace service {
 
+/**
+ * Add server specific functions.
+ */
 class ServiceParams : public ServiceParametersStruct
 {
 public:
     ServiceParams();
 
+    /**
+     * Load configurations from json stream.
+     * 
+     * \param stream json input stream.
+     */
     void loadFromJsonStream(std::istream &stream);
+    /**
+     * Load configurations from json string.
+     * 
+     * \param json json string.
+     */
     void loadFromJsonString(const std::string &json);
+    /**
+     * Load configurations from json file.
+     * 
+     * \param json file name.
+     */
     void loadFromJsonFile(const std::string &json);
 };
 
