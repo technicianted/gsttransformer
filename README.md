@@ -24,6 +24,32 @@ It is often the case that you want to enforce certain characteristics on how you
 
 `gsttransformer` allows you to control the processing rate in media time (not input bytes), and gives you the option to enforce it using blocking-based flow control or simply erroring.
 
+## Modes of operation
+
+Depending on your service setup, you can run `gsttransformer` in three modes. In all modes, flow control is maintained from consumer to producer.
+
+* Media source and consumer are the same:
+
+![producer consumer](images/prodcon.png)
+
+Simplest setup. Same RPC call to stream source media, then receive a stream of transformed media.
+
+* Media source different from producer - pull
+
+![consumer pull](images/consumerpull.png)
+
+In this mode, source (producer) makes a call to initiate the stream, gets a request ID, then makes a call to the consumer to inform it with the request ID. Consumer then makes a call to `gsttransformer` and waits for the transformed media. Finally, the producer starts streaming.
+
+Note that producer does not need to wait for consumer to start the call.
+
+* Media source different from producer - push/chanined
+
+![consumer push](images/consumerpush.png)
+
+In this mode, producer makes a call to `gsttransformer` to initiate the transformation in addition to consumer endpoint. Then, `gsttransformer` makes a streaming call to the consumer endpoint. Finally, producer can start streaming media.
+
+Note that this mode requires the consumer to implement RPC protocol to recieve the chained call.
+
 ## How to use
 
 `gsttransformer` can be used in different ways:
