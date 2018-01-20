@@ -28,7 +28,7 @@ It is often the case that you want to enforce certain characteristics on how you
 
 `gsttransformer` can be used in different ways:
 
-* #### As a service ([`gst-transformer.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/server/gst-transformer.cpp))
+#### As a service ([`gst-transformer.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/server/gst-transformer.cpp))
 
 1. Unix domain socket:
 ```bash
@@ -45,7 +45,7 @@ docker run --rm -it \
     technicianted/gsttransformer:experimental
 ```
 
-2. TCP socket:
+2. TCP/IP socket:
 ```bash
 ./gsttransformerserver -c config.json 0.0.0.0:8080
 ```
@@ -71,7 +71,7 @@ Client:
     unix:///var/run/gsttransformer.sock
 ```
 
-* #### As an in-proc gRPC for your app process ([`gst-transformer-inproc.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/samples/gst-transformer-inproc.cpp))
+#### As an in-proc gRPC for your app process ([`gst-transformer-inproc.cpp`](https://github.com/technicianted/gsttransformer/blob/master/src/samples/gst-transformer-inproc.cpp))
 ```bash
 # convert input video to ogg/theora at 1fps at maximum 5xrealtime rate
 # connect to in-proc service
@@ -81,11 +81,11 @@ Client:
     -o output.ogv
 ```
 
-* #### As an embedded shared library for your app process (C++ only)
+#### As an embedded shared library for your app process (C++ only)
 
 In this mode, you simply link and use `gsttransformer.so` and use `DynamicPipeline` directly.
 
-* #### Sample service configurations [`sampleconfig.json`]():
+#### Sample service configurations [`sampleconfig.json`]():
 ```json
 {
     "limits": {

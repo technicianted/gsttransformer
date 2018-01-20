@@ -48,10 +48,10 @@ add_executable(gsttransformerserver ${ServerSources})
 target_link_libraries(gsttransformerserver gsttransformer_server gsttransformer proto fmt pthread ${PROTOBUF_LIBRARIES} gRPC::grpc++)
 target_include_directories(gsttransformerserver PUBLIC src/lib/server)
 
-set(TestClient src/samples/client.cpp src/samples/clientcli.cpp)
-add_executable(gsttransformerclient src/samples/gst-transformer-client.cpp ${TestClient})
+set(TestClient clientsamples/cpp/client.cpp clientsamples/cpp/clientcli.cpp)
+add_executable(gsttransformerclient clientsamples/cpp/gst-transformer-client.cpp ${TestClient})
 target_link_libraries(gsttransformerclient proto fmt pthread proto ${PROTOBUF_LIBRARIES} gRPC::grpc++ uuid)
 
-add_executable(gsttransformerinproc src/samples/gst-transformer-inproc.cpp ${TestClient})
+add_executable(gsttransformerinproc clientsamples/cpp/gst-transformer-inproc.cpp ${TestClient})
 target_link_libraries(gsttransformerinproc gsttransformer_server gsttransformer proto fmt pthread proto ${PROTOBUF_LIBRARIES} gRPC::grpc++ uuid)
 target_include_directories(gsttransformerinproc PUBLIC src/lib/server)
