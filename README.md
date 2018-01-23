@@ -28,13 +28,13 @@ It is often the case that you want to enforce certain characteristics on how you
 
 Depending on your service setup, you can run `gsttransformer` in three modes. In all modes, flow control is maintained from consumer to producer.
 
-* Media source and consumer are the same:
+* #### Media source and consumer are the same:
 
 ![producer consumer](images/prodcon.png)
 
 Simplest setup. Same RPC call to stream source media, then receive a stream of transformed media.
 
-* Media source different from producer - pull
+* #### Media source different from producer - pull
 
 ![consumer pull](images/consumerpull.png)
 
@@ -42,7 +42,7 @@ In this mode, source (producer) makes a call to initiate the stream, gets a requ
 
 Note that producer does not need to wait for consumer to start the call.
 
-* Media source different from producer - push/chanined
+* #### Media source different from producer - push/chanined
 
 ![consumer push](images/consumerpush.png)
 
@@ -182,6 +182,59 @@ This is often undesirable: Typically you want service components handling differ
 #### 3. Isolation of resources
 
 Media handling usually involves intensive CPU and potentially memory. If your service heavily relies on media processing, then you will want to run it in isolation to be able to control its resources without affecting the main service.
+
+## Performance considerations
+
+`gsttansformer` adds an RPC layer on top of `gstreamer` pipelines. Eventhough gRPC is quite fast, there are some considerations when evaluating `gsttransformer`.
+
+In order to better evaluate the effects, consider the comparison between _raw_ pipeline performance using `gst-launch` and file `source` and `sink`, versus `gsstramer` using Unix socket, reading and writing from and to local files.
+
+With this setup, let's take a look at how performance is affected:
+
+#### 1. Pipeline execution time per media frame
+
+Depending on the elements in the pipeline and how long it takes them to process media, the overall latency is affected: The higher algorithm latency incurred by the elements, the lower the contribution of `gsttransformer` to the end to end latency.
+
+For example, consider the following two pipelines:
+
+* High computation video processing pipeline:
+
+Decode input video, overlay tiem and clock, then encode in theora in ogg container:
+```
+decodebin ! videorate ! video/x-raw,framerate=1/1 ! timeoverlay halignment=right valignment=top ! clockoverlay halignment=left valignment=top ! theoraenc bitrate=256 ! oggmux
+```
+
+* Low computation audio processing pipeline:
+
+Decode input audio into raw PCM, single channel at 16kHz:
+```
+decodebin ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,channels=1,rate=16000
+```
+
+We run both pipelines at maximum possible rate:
+
+|Type|Raw|`gsttransformer`|Overhead|
+|-|-|-|-|
+|Video: 10min, 45MB AVC/Vorbis|35.8s|36.3s|-1.4%|
+|Audio: 17min, 4.19MB Ogg/Vorbis|1.1s|2.3s|-43%|
+
+_Note that in practice, you probably will not want your pipeline to run with unlimited rate. Instead, to gain better performance in scale, you would typically decrease the rate._
+
+#### 2. Pipeline stream processing rate
+
+The second implication is how fast you process input media. The following chart shows media transformation time in seconds for `gst-launch` (raw) vs `gsttransformer` when run with various media processing rates in xRT:
+
+![gsttransformer vs raw](images/gsttransformer_vs_raw.png)
+
+As you can see, the gap starts at around 250xRT.
+
+Again, to emphasize the point, when running media transofrmation at scale, it is better not to run at maximum rate. Otherwise resource utilization patterns will not be predictable. In addition, sudden spikes to requests will correspond to sudden sharp increase in resources, which makes autoscaling challenging.
+
+#### 3. Size of RPC send and RPC receive
+
+The final contributing factor to performance is how many RPC messages are sent and recieved. In addition to network stack overhead, with each message, gRPC performs serialization and unserialization. The effect of messages naturally increases as the time the pipelines takes to process a message decreases.
+
+You can enable server-side buffering of transformed media messages by byte size. This can help you control the number of response messages sent.
 
 ## Some use-cases
 
