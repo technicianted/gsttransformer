@@ -222,11 +222,13 @@ _Note that in practice, you probably will not want your pipeline to run with unl
 
 #### 2. Pipeline stream processing rate
 
-The second implication is how fast you process input media. The following chart shows media transformation time in seconds for `gst-launch` (raw) vs `gsttransformer` when run with various media processing rates in xRT:
+The second implication is how fast you process input media. The following chart shows media transformation time in seconds for `gst-launch` (raw) vs `gsttransformer` when run with various media processing rates in xRT. 
+
+To emphasize the contribution of the rate, the pipeline is the same audio pipeline as above with 17 minutes audio.
 
 ![gsttransformer vs raw](images/gsttransformer_vs_raw.png)
 
-As you can see, the gap starts at around 250xRT.
+As you can see, the gap starts at around 250xRT. Also notice that `gsttransformer` latency plateaus at the point where the overhead of RPC for input/output messages exceeds the processing time of an input message.
 
 Again, to emphasize the point, when running media transofrmation at scale, it is better not to run at maximum rate. Otherwise resource utilization patterns will not be predictable. In addition, sudden spikes to requests will correspond to sudden sharp increase in resources, which makes autoscaling challenging.
 
