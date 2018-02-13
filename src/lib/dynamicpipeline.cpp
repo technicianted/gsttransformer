@@ -5,33 +5,61 @@
 #include <unistd.h>
 #include <iostream>
 
+#include "server/grunloop.h"
+
 const std::string DynamicPipeline::SOURCE_NAME = "psource";
 const std::string DynamicPipeline::SINK_NAME = "psink";
-std::thread DynamicPipeline::mainLoopThread;
-GMainLoop *DynamicPipeline::mainLoop = NULL;
-std::mutex DynamicPipeline::mainLoopLock;
 
 DynamicPipeline::~DynamicPipeline()
 {
+    if (this->lastWriteTimer) {
+        g_source_remove(this->lastWriteTimer);
+        this->lastWriteTimer = 0;
+    }
+
+    if (this->bus) {
+        gst_bus_remove_watch(this->bus);
+        gst_object_unref(this->bus);
+    }
+    if (this->source)
+        gst_object_unref(this->source);
+    if (this->sink)
+        gst_object_unref(this->sink);
+    if (this->pipeline) {
+        auto r = gst_element_set_state(this->pipeline, GST_STATE_NULL);
+        this->logger->trace("pipeline set state returned {0}", r);
+        GstState current, pending;
+        r = gst_element_get_state(this->pipeline, &current, &pending, GST_CLOCK_TIME_NONE);
+        this->logger->trace("pipeline state before destruction: current {0}, pending {1}, return {2}", 
+        gst_element_state_get_name(current), 
+        gst_element_state_get_name(pending), 
+        r);
+        gst_object_unref(this->pipeline);
+    }
+
+    if (!GRunLoop::main()->isOnLoop()) {
+        std::unique_lock<std::mutex> lock(drainedMutex);
+        g_idle_add(&drain, this);
+        this->drained = false;
+        while(!this->drained)
+            this->drainedCond.wait(lock);
+    }
+
+    this->logger->trace("DynamicPipeline destructor called");
 }
 
-void DynamicPipeline::start(const std::function<int(const char *, int)> &consumer)
+void DynamicPipeline::start(
+    const std::function<void(bool)> &termination)
 {
     this->logger->debug("Starting pipeline");
 
-    std::unique_lock<std::mutex> lock(this->mainLoopLock);
-    if (mainLoop == NULL) {
-        mainLoopThread = std::thread([]{
-            mainLoop = g_main_loop_new (NULL, FALSE);
-            g_main_loop_run(mainLoop);
-        });
-        mainLoopThread.detach();
-    }
+    // make sure we have a main loop
+    GRunLoop::main();
 
     this->done = false;
     this->terminationReason = PipelineTerminationReason::NONE;
     this->terminationMessage.clear();
-    this->consumer = consumer;
+    this->terminationCallback = termination;
     this->totalBytesRead = 0;
     this->totalBytesWritten = 0;
     this->processedTime = 0;
@@ -42,6 +70,14 @@ void DynamicPipeline::start(const std::function<int(const char *, int)> &consume
         auto event = gst_event_new_step(GST_FORMAT_PERCENT, 100, this->parameters.getRate(), FALSE, FALSE);
         gst_element_send_event(GST_ELEMENT(this->sink), event);
     }
+
+    if (this->parameters.getReadTimeoutMilliseconds() > 0) {
+        this->logger->debug("starting read timeout timer");
+        this->lastWriteTimer = g_timeout_add(
+            500,
+            writeTimeoutCallback,
+            this);
+    }
 }
 
 void DynamicPipeline::endData()
@@ -51,6 +87,11 @@ void DynamicPipeline::endData()
             PipelineTerminationReason::END_OF_STREAM,
             "end of stream",
             false);
+    }
+
+    if (this->lastWriteTimer) {
+        g_source_remove(this->lastWriteTimer);
+        this->lastWriteTimer = 0;
     }
 }
 
@@ -63,6 +104,28 @@ void DynamicPipeline::waitUntilCompleted()
     this->logger->debug("wait completed");  
 }
 
+std::vector<std::string> DynamicPipeline::getPendingSample(int count)
+{
+    std::vector<std::string> sampleBuffers;
+
+    for(int i=0; i<count; i++) {
+        GstSample *sample = NULL;
+        g_signal_emit_by_name(this->sink, "pull-sample", &sample);
+        if (sample) {
+            auto buffer = gst_sample_get_buffer(sample);
+            GstMapInfo info;
+            gst_buffer_map(buffer, &info, GST_MAP_READ);
+            sampleBuffers.emplace_back((const char *)info.data, info.size);
+            gst_buffer_unmap(buffer, &info);
+            gst_sample_unref(sample);
+
+            this->totalBytesWritten += info.size;
+        }
+    }
+
+    return sampleBuffers;
+}
+
 PipelineTerminationReason DynamicPipeline::getTerminationReason() const
 {
     return this->terminationReason;
@@ -71,6 +134,26 @@ PipelineTerminationReason DynamicPipeline::getTerminationReason() const
 std::string DynamicPipeline::getTerminationMessage() const
 {
     return this->terminationMessage;
+}
+
+void DynamicPipeline::setSampleAvailableCallback(const std::function<void()> &callback)
+{
+    this->sampleAvailableCallback = callback;
+}
+
+void DynamicPipeline::setNeedDataCallback(const std::function<void()> &callback)
+{
+    this->needDataCallback = callback;
+}
+
+void DynamicPipeline::setEnoughDataCallback(const std::function<void()> &callback)
+{
+    this->enoughDataCallback = callback;
+}
+
+void DynamicPipeline::setEOSCallback(const std::function<void()> &callback)
+{
+    this->eosCallback = callback;
 }
 
 unsigned long DynamicPipeline::getProcessedInputBytes() const
@@ -99,17 +182,6 @@ void DynamicPipeline::stop()
 
 int DynamicPipeline::addData(const char *buffer, int size)
 {
-    if (this->parameters.getReadTimeoutMilliseconds() > 0) {
-        auto timeNow = std::chrono::steady_clock::now();
-        auto diffMillis = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - this->lastWriteTime).count();
-        if (diffMillis > this->parameters.getReadTimeoutMilliseconds()) {
-            this->terminatePipeline(
-                PipelineTerminationReason::READ_TIMEOUT,
-                fmt::format("read timeout of {0}ms exceeded", this->parameters.getReadTimeoutMilliseconds()));
-            return -1;
-        }
-    }
-
     auto gbuffer = gst_buffer_new_and_alloc(size);
     GstMapInfo info; 
     gst_buffer_map(gbuffer, &info, GST_MAP_WRITE);
@@ -145,6 +217,8 @@ void DynamicPipeline::terminatePipeline(PipelineTerminationReason reason, const 
     } else {
         g_idle_add(gstTerminateIdleCallback, this);
     }
+
+    this->terminationCallback(force);
 }
 
 DynamicPipeline * DynamicPipeline::createFromSpecs(const PipelineParameters &parameters, const std::string &pipelineId, const std::string &specs)
@@ -175,6 +249,7 @@ DynamicPipeline::DynamicPipeline(std::shared_ptr<spdlog::logger> &logger, const 
     this->parameters = parameters;
     this->pipelineId = pipelineId;
     this->pipeline = pipeline;
+    this->lastWriteTimer = 0;
 
     this->bus = gst_pipeline_get_bus(GST_PIPELINE(this->pipeline));
     gst_bus_add_watch(this->bus, (GstBusFunc) gstBusMessage, this);
@@ -196,7 +271,8 @@ DynamicPipeline::DynamicPipeline(std::shared_ptr<spdlog::logger> &logger, const 
     
     this->logger->debug("appsrc max bytes {0}", gst_app_src_get_max_bytes(this->source));
     g_object_set(this->source, 
-        "block", TRUE, 
+        "block", FALSE, 
+        "emit-signals", TRUE,
         NULL);
     g_object_set(this->sink, 
         "emit-signals", TRUE, 
@@ -204,6 +280,7 @@ DynamicPipeline::DynamicPipeline(std::shared_ptr<spdlog::logger> &logger, const 
         NULL);
     g_signal_connect(this->sink, "new-sample", G_CALLBACK(gstNewSample), this);
     g_signal_connect(this->source, "enough-data", G_CALLBACK(gstEnoughData), this);
+    g_signal_connect(this->source, "need-data", G_CALLBACK(gstNeedData), this);
 
     this->logger->info("created pipeline");
 }
@@ -233,13 +310,16 @@ gboolean DynamicPipeline::gstBusMessage(GstBus * bus, GstMessage * message, gpoi
 
         case GST_MESSAGE_EOS:
         {
+            if (p->eosCallback)
+                p->eosCallback();
             std::lock_guard<std::mutex> lock(p->doneMutex);
             p->done = true;
             p->doneCond.notify_one();
             break;
         }
 
-        case GST_MESSAGE_STATE_CHANGED: {
+        case GST_MESSAGE_STATE_CHANGED: 
+        {
             GstState old_state, new_state;
             gst_message_parse_state_changed(message, &old_state, &new_state, NULL);
             p->logger->debug("element {0} changed state from {1} to {2}",
@@ -257,6 +337,7 @@ gboolean DynamicPipeline::gstBusMessage(GstBus * bus, GstMessage * message, gpoi
             p->logger->debug("status type is {0} from {1}", type, GST_OBJECT_NAME(owner));
             break;
         }
+
         case GST_MESSAGE_STREAM_START:
         {
             p->logger->debug("stream start from {0}", GST_OBJECT_NAME(message->src));
@@ -273,29 +354,20 @@ gboolean DynamicPipeline::gstBusMessage(GstBus * bus, GstMessage * message, gpoi
 void DynamicPipeline::gstNewSample(GstElement *sink, gpointer user_data)
 {
     auto p = static_cast<DynamicPipeline *>(user_data);
-    GstSample *sample;
-    g_signal_emit_by_name(p->sink, "pull-sample", &sample);
-    if (sample) {
-        auto buffer = gst_sample_get_buffer(sample);
-        GstMapInfo info; 
-        gst_buffer_map(buffer, &info, GST_MAP_READ);
-        p->consumer((const char *)info.data, info.size);
-        gst_buffer_unmap(buffer, &info);
-        gst_sample_unref(sample);
+    if (p->sampleAvailableCallback)
+        p->sampleAvailableCallback();
 
-        p->totalBytesWritten += info.size;
-        gint64 pos;
-        auto r = gst_element_query_position(p->pipeline, GST_FORMAT_TIME, &pos);
-        if (!r)
-            p->logger->notice("unable to query position");
-        if (pos > p->processedTime)
-            p->processedTime = pos;
-        if (p->parameters.getLengthLimit() > 0 ) {
-            if (p->processedTime >= p->parameters.getLengthLimit() * GST_MSECOND) {
-                    p->terminatePipeline(
-                        PipelineTerminationReason::ALLOWED_DURATION_EXCEEDED, 
-                        fmt::format("max duration exceeded: {0}ms", p->parameters.getLengthLimit()));
-            }
+    gint64 pos;
+    auto r = gst_element_query_position(p->pipeline, GST_FORMAT_TIME, &pos);
+    if (!r)
+        p->logger->notice("unable to query position");
+    if (pos > p->processedTime)
+        p->processedTime = pos;
+    if (p->parameters.getLengthLimit() > 0 ) {
+        if (p->processedTime >= p->parameters.getLengthLimit() * GST_MSECOND) {
+                p->terminatePipeline(
+                    PipelineTerminationReason::ALLOWED_DURATION_EXCEEDED, 
+                    fmt::format("max duration exceeded: {0}ms", p->parameters.getLengthLimit()));
         }
     }
 }
@@ -309,6 +381,17 @@ void DynamicPipeline::gstEnoughData(GstElement * pipeline, guint size, gpointer 
             PipelineTerminationReason::RATE_EXCEEDED,
             fmt::format("rate exceeded: {0}rt", p->parameters.getRate()));
     }
+    else {
+        if (p->enoughDataCallback)
+            p->enoughDataCallback();
+    }
+}
+
+void DynamicPipeline::gstNeedData(GstElement * pipeline, guint size, gpointer user_data)
+{
+    auto p = static_cast<DynamicPipeline *>(user_data);
+    if (p->needDataCallback)
+        p->needDataCallback();
 }
 
 gboolean DynamicPipeline::gstTerminateIdleCallback(gpointer user_data)
@@ -322,4 +405,32 @@ gboolean DynamicPipeline::gstTerminateIdleCallback(gpointer user_data)
     p->doneCond.notify_one();
 
     return G_SOURCE_REMOVE;
+}
+
+gboolean DynamicPipeline::writeTimeoutCallback(gpointer user_data)
+{
+    auto p = static_cast<DynamicPipeline *>(user_data);
+    
+    auto timeNow = std::chrono::steady_clock::now();
+    auto diffMillis = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - p->lastWriteTime).count();
+    p->logger->trace("writeTimeoutCallback: delta {0}/{1}ms", diffMillis, p->parameters.getReadTimeoutMilliseconds());
+    if (diffMillis > p->parameters.getReadTimeoutMilliseconds()) {
+        p->terminatePipeline(
+            PipelineTerminationReason::READ_TIMEOUT,
+            fmt::format("read timeout of {0}ms exceeded", p->parameters.getReadTimeoutMilliseconds()));
+        p->lastWriteTimer = 0;
+        return G_SOURCE_REMOVE;
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
+gboolean DynamicPipeline::drain(gpointer user_data)
+{
+    auto p = static_cast<DynamicPipeline *>(user_data);
+    std::unique_lock<std::mutex> lock(p->drainedMutex);
+    p->drained = true;
+    p->drainedCond.notify_one();
+
+    return FALSE;
 }

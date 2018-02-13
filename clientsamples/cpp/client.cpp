@@ -7,6 +7,7 @@
 #include <uuid/uuid.h>
 
 #include "client.h"
+#include "clientcli.h"
 #include "gsttransformer.grpc.pb.h"
 
 using namespace gst_transformer::service;
@@ -27,6 +28,10 @@ void transform(
     std::ofstream &of, 
     gst_transformer::service::TransformConfig &config)
 {
+    std::random_device randomDevice;
+    std::default_random_engine randomSource(randomDevice());
+    std::uniform_int_distribution<int> randomGenerator(0, writeDelay);
+
     auto requestId = generateRequestId();
     logger->info("starting request ID {0}", requestId);
     
@@ -57,7 +62,7 @@ void transform(
             }
             else if (response.has_transform_completed()) {
                 transformCompleted.CopyFrom(response.transform_completed());
-                // loop should break now since this is always teh last message
+                // loop should break now since this is always the last message
             }
         }
         readStreamClosed = true;
@@ -74,6 +79,14 @@ void transform(
         writeStreamClosed = !requestStream->Write(request);
         totalWrite += inf.gcount();
         logger->trace("written {0}, {1} so far", inf.gcount(), totalWrite);
+        if (writeDelay > 0) {
+            auto sleepTime = writeDelay;
+            if (randomizeWriteDelay) {
+                sleepTime = randomGenerator(randomDevice);
+            }
+            logger->trace("sleeping for {0}ms", sleepTime);
+            usleep(sleepTime * 1000);
+        }
     }
     
     requestStream->WritesDone();

@@ -13,13 +13,15 @@ std::ifstream inputFileStream;
 std::string outputFileName = "/dev/stdout";
 std::ofstream outputFileStream;
 std::string endpoint;
+int writeDelay = 0;
+bool randomizeWriteDelay = false;
 
 int parse_opt(int argc, char **argv, bool requiresEndpoint)
 {
 	auto pipelineConfig = transformConfig.mutable_pipeline_parameters();
 
 	int key;
-	while ((key = getopt(argc, argv, "+e:r:l:b:i:o:s:p:")) != -1) {
+	while ((key = getopt(argc, argv, "+e:r:w:l:b:i:o:s:p:")) != -1) {
 		switch (key) {
 			case 'e':
 				if (!strcmp(optarg, "block"))
@@ -53,6 +55,13 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 				transformConfig.set_pipeline_output_buffer(buffer);
 				break;
 			}
+			case 'w':
+				writeDelay = strtol(optarg, NULL, 10);
+				if (writeDelay < 0) {
+					writeDelay = abs(writeDelay);
+					randomizeWriteDelay = true;
+				}
+				break;
 			case 'i':
 				inputFileName = optarg;
 				break;
@@ -101,14 +110,15 @@ int parse_opt(int argc, char **argv, bool requiresEndpoint)
 void usage()
 {
 	std::cerr << "Usage: gsttransformerclient [OPTION...] [<endpoint>]" << std::endl;
-	std::cerr << "  -e MODE\tRate enforcement mode {BLOCK|ERROR}. Default BLOCK." << std::endl;
-	std::cerr << "  -r RATE\tTransformation rate in double: 1.0 = RT, -1 passthrough. Default 1.0." << std::endl;
-	std::cerr << "  -l LEN\tSet maximum audio duration in milliseconds, 0 unlimited. Default 0." << std::endl;
 	std::cerr << "  -b BUFFER\tSet pipeline output buffer size. Default 0 (no buffering)." << std::endl;
+	std::cerr << "  -e MODE\tRate enforcement mode {BLOCK|ERROR}. Default BLOCK." << std::endl;
 	std::cerr << "  -i FILE\tInput file. Default stdin." << std::endl;
+	std::cerr << "  -l LEN\tSet maximum audio duration in milliseconds, 0 unlimited. Default 0." << std::endl;
 	std::cerr << "  -o FILE\tOutput file. Default stout." << std::endl;
-	std::cerr << "  -s SPECS\tGStream pipeline specs." << std::endl;
 	std::cerr << "  -p PIPELINE\tExisting pipeline name as defined on the server." << std::endl;
+	std::cerr << "  -r RATE\tTransformation rate in double: 1.0 = RT, -1 passthrough. Default 1.0." << std::endl;
+	std::cerr << "  -s SPECS\tGStream pipeline specs." << std::endl;
+	std::cerr << "  -w MS\tWrite delay in ms, 0 none, <0ms random up to |MS|" << std::endl;
 
     exit(1);
 }

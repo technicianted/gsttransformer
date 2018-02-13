@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     }
 
     std::shared_ptr<spdlog::logger> logger = spdlog::stderr_logger_mt("client");
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::trace);
 
     auto channel = ::grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials());
     transform(logger, channel, inputFileStream, outputFileStream, transformConfig);

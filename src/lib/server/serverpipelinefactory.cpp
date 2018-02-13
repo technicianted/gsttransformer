@@ -9,7 +9,7 @@ ServerPipelineFactory::ServerPipelineFactory(const ServiceParametersStruct &serv
     this->serviceParams = serviceParams;
 }
  
-Pipeline * ServerPipelineFactory::get(const std::string &requestId, const TransformConfig &config)
+std::unique_ptr<Pipeline> ServerPipelineFactory::get(const std::string &requestId, const TransformConfig &config)
 {
     auto requestedParams = config.pipeline_parameters();
     ::PipelineParameters params;
@@ -21,7 +21,10 @@ Pipeline * ServerPipelineFactory::get(const std::string &requestId, const Transf
     if (requestedParams.length_limit_milliseconds())
         params.setLengthLimit(requestedParams.length_limit_milliseconds());
 
-    Pipeline *pipeline = NULL;
+    if (requestedParams.read_timeout_milliseconds())
+        params.setReadTimeoutMilliseconds(requestedParams.read_timeout_milliseconds());
+ 
+    std::unique_ptr<Pipeline> pipeline;
     if (!config.pipeline_name().empty() && !config.pipeline().empty())
         throw std::invalid_argument("cannot specify both pipeline name and specs");
     if (config.pipeline_name().empty() && config.pipeline().empty())
@@ -31,20 +34,20 @@ Pipeline * ServerPipelineFactory::get(const std::string &requestId, const Transf
         if (config.pipeline().empty()) 
             throw std::invalid_argument("No dynamic pipeline specs specified");
 
-        pipeline = DynamicPipeline::createFromSpecs(
+        pipeline.reset(DynamicPipeline::createFromSpecs(
             params, 
             requestId,
-            config.pipeline());
+            config.pipeline()));
     }
     else {
         auto iter = this->serviceParams.pipelines().find(config.pipeline_name());
         if (iter == this->serviceParams.pipelines().end())
             throw std::invalid_argument(fmt::format("pipeline name '{0}' not defined", config.pipeline_name()));
         
-        pipeline = DynamicPipeline::createFromSpecs(
+        pipeline.reset(DynamicPipeline::createFromSpecs(
             params, 
             requestId,
-            iter->second.specs());
+            iter->second.specs()));
     }
     
     return pipeline;

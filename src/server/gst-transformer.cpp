@@ -29,36 +29,37 @@ all copies or substantial portions of the Software.
 #include <grpc++/server_context.h>
 #include <grpc++/security/server_credentials.h>
 
-#include "serviceimpl.h"
 #include "servercli.h"
 #include "serviceparams.h"
+#include "server/async/asyncserviceimpl.h"
+
 using namespace gst_transformer::service;
 
-void runServer(const std::string &endpoint, const ServiceParams &params)
+void runAsyncServer(const std::string &endpoint, const ServiceParams &params)
 {
-    gst_transformer::service::ServiceImpl service(params);
-
+    GstTransformer::AsyncService service;
     ::grpc::ServerBuilder builder;
     builder.AddListeningPort(endpoint, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
-    std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());
-    if (!server) {
-        std::cout << "Unable to build service" << std::endl;
-        exit(2);
-    }
-    std::cout << "Server listening on " << endpoint << std::endl;
-    server->Wait();
+    std::unique_ptr<::grpc::ServerCompletionQueue> completionQueue = builder.AddCompletionQueue();
+    auto server = builder.BuildAndStart();
+
+    AsyncServiceImpl asyncService(&service, completionQueue.get(), params);
+    std::cout << "Async server listening on " << endpoint << std::endl;
+    asyncService.start();
 }
 
 int main(int argc, char **argv)
 {
+    spdlog::set_pattern("%+ %t");
+
     gst_init (&argc, &argv);
 
     if (parse_opt(argc, argv) == -1) {
         usage();
     }
 
-    ServiceParams params;
+    gst_transformer::service::ServiceParams params;
     if (!configurationFile.empty()) {
         params.loadFromJsonFile(configurationFile);
     }
@@ -70,5 +71,5 @@ int main(int argc, char **argv)
         }
     }
 
-    runServer(endpoint, params);
+    runAsyncServer(endpoint, params);
 }

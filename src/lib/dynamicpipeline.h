@@ -48,9 +48,10 @@ public:
     /**
      * Start the pipeline.
      * 
-     * \param consumer lambda function to be called when the pipeline outputs data.
+     * \param termination lambda function to be called when the pipeline is terminated.
      */
-    void start(const std::function<int(const char *, int)> &consumer);
+    void start(
+        const std::function<void(bool)> &termination) override;
     /**
      * Immediately stops the pipeline.
      */
@@ -66,30 +67,66 @@ public:
      * \param size input buffer size.
      * \return number of bytes copied, -1 on error.
      */
-    int addData(const char *buffer, int size);
+    int addData(const char *buffer, int size) override;
     /**
      * Indicates that last data has been added and the pipeline
      * may finish processing and stop.
      */
-    void endData();
+    void endData() override;
     /**
      * Block the caller until the pipeline has finished processing
      * all the buffers and has completely stopped.
      */
-    void waitUntilCompleted();
+    void waitUntilCompleted() override;
     /**
      * Obtain the termination reason for the pipeline.
      * This method is useful when addData() returned an error.
      * 
      * \return pipeline termination reason.
      */
-    PipelineTerminationReason getTerminationReason() const;
+    PipelineTerminationReason getTerminationReason() const override;
     /**
      * Obtain the termination reason message.
      * 
      * \return termination reason message.
      */
-    std::string getTerminationMessage() const;
+    std::string getTerminationMessage() const override;
+
+    /**
+     * Set callback function when there are samples to consume.
+     * 
+     * The callback will be called multiple times whenever a sample is ready.
+     * 
+     * \param callback callback function
+     */
+    void setSampleAvailableCallback(const std::function<void()> &callback) override;
+    /**
+     * Set callback function when pipeline needs input data.
+     * 
+     * \param callback callback function
+     */    
+    void setNeedDataCallback(const std::function<void()> &callback) override;
+    /**
+     * Set callback function when pipeline has enough data.
+     * 
+     * \param callback callback function
+     */    
+    void setEnoughDataCallback(const std::function<void()> &callback) override;
+    /**
+     * Set callback when the pipeline encounters end of stream.
+     * 
+     * \param callback callback function
+     */
+    void setEOSCallback(const std::function<void()> &callback) override;
+    /**
+     * Gets pending samples.
+     * 
+     * Caller must have kept track of SampleAvailableCallbacks.
+     * 
+     * \param count get this number of samples
+     * \return vector of samples
+     */
+    std::vector<std::string> getPendingSample(int count) override;
 
     /**
      * Get how many bytes have been processed by the pipeline.
@@ -98,19 +135,19 @@ public:
      * of bytes buffered as well that may have not been processed yet.
      * \return number of processed bytes.
      */
-    unsigned long getProcessedInputBytes() const;
+    unsigned long getProcessedInputBytes() const override;
     /**
      * Get how many bytes have been output by the pipeline.
      * 
      * \return number of output bytes.
      */
-    unsigned long getProcessedOutputBytes() const;
+    unsigned long getProcessedOutputBytes() const override;
     /**
      * Get duration in seconds of media stream time that have been processed.
      * 
      * \return seconds of stream media time processed.
      */
-    double getProcessedTime() const;
+    double getProcessedTime() const override;
 
     /**
      * Create a new pipeline instances from gst specs.
@@ -125,12 +162,9 @@ public:
 private:
     static const std::string SOURCE_NAME;
     static const std::string SINK_NAME;
-    static std::thread mainLoopThread;
-    static GMainLoop *mainLoop;
-    static std::mutex mainLoopLock;
 
     std::shared_ptr<spdlog::logger> logger;
-    std::function<int(const char *, int)> consumer;
+    std::function<void(bool)> terminationCallback;
     PipelineParameters parameters;
     std::string pipelineId;
     GstElement *pipeline;
@@ -139,6 +173,7 @@ private:
     GstAppSink *sink;
     PipelineTerminationReason terminationReason;
     std::string terminationMessage;
+    guint lastWriteTimer;
     std::chrono::steady_clock::time_point lastWriteTime;
     unsigned long totalBytesRead;
     unsigned long totalBytesWritten;
@@ -146,14 +181,24 @@ private:
     bool done;
     std::mutex doneMutex;
     std::condition_variable doneCond;
+    bool drained;
+    std::mutex drainedMutex;
+    std::condition_variable drainedCond;
+    std::function<void()> sampleAvailableCallback;
+    std::function<void()> enoughDataCallback;
+    std::function<void()> needDataCallback;
+    std::function<void()> eosCallback;
 
     DynamicPipeline(std::shared_ptr<spdlog::logger> &logger, const PipelineParameters &parameters, const std::string &pipelineId, GstElement *pipeline);
     void terminatePipeline(PipelineTerminationReason reason, const std::string &message, bool force = true);
 
     static gboolean gstBusMessage(GstBus * bus, GstMessage * message, gpointer user_data);
     static void gstEnoughData(GstElement * pipeline, guint size, gpointer user_data);
+    static void gstNeedData(GstElement * pipeline, guint size, gpointer user_data);
     static void gstNewSample(GstElement *sink, gpointer user_data);
     static gboolean gstTerminateIdleCallback(gpointer user_data);
+    static gboolean writeTimeoutCallback(gpointer user_data);
+    static gboolean drain(gpointer user_data);
 };
 
 #endif

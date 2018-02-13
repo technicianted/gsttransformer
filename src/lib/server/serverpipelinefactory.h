@@ -45,7 +45,7 @@ public:
      * \param config request parameters.
      * \return a pipeline instance ready for use.
      */
-    Pipeline * get(const std::string &requestId, const TransformConfig &config);
+    std::unique_ptr<Pipeline> get(const std::string &requestId, const TransformConfig &config);
 
 private:
     ServiceParametersStruct serviceParams;

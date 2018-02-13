@@ -25,7 +25,7 @@ all copies or substantial portions of the Software.
 #include <grpc++/server_builder.h>
 #include <spdlog/spdlog.h>
 
-#include "serviceimpl.h"
+#include "async/asyncserviceimpl.h"
 #include "client.h"
 #include "clientcli.h"
 
@@ -45,18 +45,31 @@ int main(int argc, char **argv)
     GST_DEBUG_CATEGORY_INIT(appsrc_pipeline_debug, "appsrc-pipeline", 0, "gst-transformer");
 
     std::shared_ptr<spdlog::logger> logger = spdlog::stderr_logger_mt("inproc");
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::trace);
 
     // default parameters = unlimited
     ServiceParametersStruct params;
     params.set_allow_dynamic_pipelines(true);
-    gst_transformer::service::ServiceImpl service(params);
+
+    GstTransformer::AsyncService service;
     ::grpc::ServerBuilder builder;
     builder.RegisterService(&service);
-    std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());
+    std::unique_ptr<::grpc::ServerCompletionQueue> completionQueue = builder.AddCompletionQueue();
+    auto server = builder.BuildAndStart();
     auto channel = server->InProcessChannel(::grpc::ChannelArguments());
+    AsyncServiceImpl asyncService(&service, completionQueue.get(), params);
+    
+    std::thread serviceThread([&] {
+        asyncService.start();
+    });
 
     transform(logger, channel, inputFileStream, outputFileStream, transformConfig);
 
     logger->info("all done, exiting.");
+
+    server->Shutdown();
+    logger->info("server shutdown");
+    asyncService.stop();
+    logger->info("async service shutdown");
+    serviceThread.join();
 }

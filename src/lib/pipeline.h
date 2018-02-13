@@ -18,6 +18,7 @@ all copies or substantial portions of the Software.
 #define __PIPELINE_H__
 
 #include <functional>
+#include <vector>
 
 #include "pipelineparameters.h"
 
@@ -50,14 +51,15 @@ enum class PipelineTerminationReason
 class Pipeline
 {
 public:
-    ~Pipeline() {};
+    virtual ~Pipeline() {};
 
     /**
      * Start the pipeline.
      * 
-     * \param consumer lambda function to be called when the pipeline outputs data.
+     * \param termination lambda function to be called when the pipeline is terminated.
      */
-    virtual void start(const std::function<int(const char *, int)> &consumer) = 0;
+    virtual void start(
+        const std::function<void(bool)> &termination) = 0;
     /**
      * Immediately stops the pipeline.
      */
@@ -98,6 +100,42 @@ public:
      */
     virtual std::string getTerminationMessage() const = 0;
 
+    /**
+     * Set callback function when there are samples to consume.
+     * 
+     * The callback will be called multiple times whenever a sample is ready.
+     * 
+     * \param callback callback function
+     */
+    virtual void setSampleAvailableCallback(const std::function<void()> &callback) = 0;
+    /**
+     * Set callback function when pipeline needs input data.
+     * 
+     * \param callback callback function
+     */
+    virtual void setNeedDataCallback(const std::function<void()> &callback) = 0;
+    /**
+     * Set callback function when pipeline has enough data.
+     * 
+     * \param callback callback function
+     */
+    virtual void setEnoughDataCallback(const std::function<void()> &callback) = 0;
+    /**
+     * Set callback when the pipeline encounters end of stream.
+     * 
+     * \param callback callback function
+     */
+    virtual void setEOSCallback(const std::function<void()> &callback) = 0;
+    /**
+     * Gets pending samples.
+     * 
+     * Caller must have kept track of SampleAvailableCallbacks.
+     * 
+     * \param count get this number of samples
+     * \return vector of samples
+     */
+    virtual std::vector<std::string> getPendingSample(int count) = 0;
+    
     /**
      * Get how many bytes have been processed by the pipeline.
      * 

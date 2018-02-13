@@ -38,7 +38,7 @@ file(GLOB LibSources src/lib/*.cpp)
 add_library(gsttransformer SHARED ${LibSources})
 target_link_libraries(gsttransformer fmt pthread ${GST_LIBRARIES})
 
-file(GLOB ServerLibSources src/lib/server/*.cpp)
+file(GLOB_RECURSE ServerLibSources src/lib/server/*.cpp)
 add_library(gsttransformer_server SHARED ${ServerLibSources})
 target_link_libraries(gsttransformer_server gsttransformer)
 add_dependencies(gsttransformer_server proto)

@@ -14,6 +14,10 @@ You can use `gsttransformer` has a simple library, as an in-proc gRPC in the sam
 
 Using `gst-launch` declarative media pipelines, you can either preset your pipelines or even specify them on per-call basis.
 
+* #### Highly scalable async RPC
+
+Built using async gRPC framework that makes it very scalable when handling multiple requests.
+
 * #### Stream sanitization and format enforcement
 
 GStreamer is a very stable and powerful media processing framework. You have all the freedom to construct your pipelines in such a way to enforce formats, do sanitation and much more.
@@ -102,7 +106,7 @@ Client:
 # convert input video to ogg/theora at 1fps at maximum 5xrealtime rate
 # connect to in-proc service
 ./gsttransformerinproc \
-    -p video/ogg_theora_256k_1fp \
+    -s "decodebin ! videorate ! video/x-raw,framerate=1/1 ! timeoverlay halignment=right valignment=top ! clockoverlay halignment=left valignment=top ! theoraenc bitrate=256 ! oggmux" \
     -i la_chute_d_une_plume_576p.ogv \
     -o output.ogv
 ```

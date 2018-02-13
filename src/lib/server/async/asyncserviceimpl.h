@@ -14,21 +14,37 @@ all copies or substantial portions of the Software.
 
 */
 
-#ifndef __CLIENTCLI_H__
-#define __CLIENTCLI_H__
+#ifndef __ASYNCSERVICEIMPL_H__
+#define __ASYNCSERVICEIMPL_H__
 
+#include <spdlog/spdlog.h>
+
+#include "serviceparameters.pb.h"
 #include "gsttransformer.grpc.pb.h"
 
-using namespace gst_transformer::service;
+namespace gst_transformer {
+namespace service {
 
-extern TransformConfig transformConfig;
-extern std::ifstream inputFileStream;
-extern std::ofstream outputFileStream;
-extern int writeDelay;
-extern bool randomizeWriteDelay;
-extern std::string endpoint;
+class AsyncServiceImpl
+{
+public:
+    AsyncServiceImpl(
+        GstTransformer::AsyncService *service,
+        ::grpc::ServerCompletionQueue *completionQueue,
+        const ServiceParametersStruct &params);
+    ~AsyncServiceImpl();
 
-int parse_opt(int argc, char **argv, bool);
-void usage();
+    void start();
+    void stop();
+
+private:
+    std::shared_ptr<spdlog::logger> globalLogger;
+    GstTransformer::AsyncService *service;
+    ::grpc::ServerCompletionQueue *completionQueue;
+    ServiceParametersStruct params;
+};
+
+}
+}
 
 #endif
