@@ -24,6 +24,7 @@ all copies or substantial portions of the Software.
 #include <grpc++/client_context.h>
 #include <grpc++/server_builder.h>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_sinks.h>
 
 #include "async/asyncserviceimpl.h"
 #include "client.h"

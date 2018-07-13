@@ -1,5 +1,6 @@
 #include "asyncserviceimpl.h"
 #include "asynctransformimpl.h"
+#include <spdlog/sinks/stdout_sinks.h>
 
 #include <functional>
 

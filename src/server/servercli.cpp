@@ -50,7 +50,7 @@ void usage()
 	std::cerr << "Usage: gsttransformerserver [OPTION...] [<endpoint>]" << std::endl;
     std::cerr << "  -c FILE\tjson configuration file." << std::endl;
     std::cerr << "     env: GSTTRANSFORMER_CONFIG_PATH" << std::endl;
-	std::cerr << "  -d LEVEL\tDebug level {trace|debug|info|notice|error}." << std::endl;
+	std::cerr << "  -d LEVEL\tDebug level {trace|debug|info|warn|error}." << std::endl;
     std::cerr << "     env: GSTTRANSFORMER_LOG_LEVEL" << std::endl;
     std::cerr << "endpoint: grpc style endpoint" << std::endl;
     std::cerr << "  env: GSTTRANSFORMER_ENDPOINT" << std::endl;

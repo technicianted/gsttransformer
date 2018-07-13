@@ -1,3 +1,4 @@
+
 /*
 
 Copyright 2018 technicianted
@@ -23,6 +24,8 @@ all copies or substantial portions of the Software.
 
 #include "client.h"
 #include "clientcli.h"
+
+#include <spdlog/sinks/stdout_sinks.h>
 
 int main(int argc, char **argv)
 {

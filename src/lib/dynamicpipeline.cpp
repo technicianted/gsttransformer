@@ -1,5 +1,6 @@
 #include "dynamicpipeline.h"
 
+#include <spdlog/sinks/stdout_sinks.h>
 #include <spdlog/spdlog.h>
 #include <fmt/format.h>
 #include <unistd.h>
@@ -234,7 +235,7 @@ DynamicPipeline * DynamicPipeline::createFromSpecs(const PipelineParameters &par
     auto pipeline = gst_parse_launch(desc.c_str(), &error);
     if (!pipeline) {
         auto message = fmt::format("could not create pipeline {0}: {1}", pipelineId, error->message);
-        logger->notice(message);
+        logger->warn(message);
         g_error_free(error);
         throw std::invalid_argument(message);
     }
@@ -360,7 +361,7 @@ void DynamicPipeline::gstNewSample(GstElement *sink, gpointer user_data)
     gint64 pos;
     auto r = gst_element_query_position(p->pipeline, GST_FORMAT_TIME, &pos);
     if (!r)
-        p->logger->notice("unable to query position");
+        p->logger->warn("unable to query position");
     if (pos > p->processedTime)
         p->processedTime = pos;
     if (p->parameters.getLengthLimit() > 0 ) {
