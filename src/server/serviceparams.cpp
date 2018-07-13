@@ -2,6 +2,7 @@
 
 #include <fmt/format.h>
 #include <fstream>
+#include <sstream>
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
