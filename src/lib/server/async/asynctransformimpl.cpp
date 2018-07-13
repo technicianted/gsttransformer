@@ -63,7 +63,7 @@ void AsyncTransformImpl::setup()
         auto iterator = metadata.find(ClientMetadata_Name(ClientMetadata::requestid));
         if (iterator == metadata.end()) {
             auto message = fmt::format("request ID not set: {0}", ClientMetadata_Name(ClientMetadata::requestid));
-            this->globalLogger->error(message);
+            this->globalLogger->warn(message);
 
             this->responder.Finish(
                 ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, message), 
@@ -81,7 +81,7 @@ void AsyncTransformImpl::setup()
 
     this->startFunction = [&] (bool ok) {
         if (!this->request.has_config()) {
-            this->logger->error("config message not sent");
+            this->logger->warn("config message not sent");
             this->responder.Finish(
                 ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, "config message not sent"), 
                 &this->finishFunction);
@@ -96,7 +96,7 @@ void AsyncTransformImpl::setup()
         }
         catch(std::exception &e) {
             auto message = fmt::format("invalid config: {0}", e.what());
-            logger->error(message);
+            logger->warn(message);
             this->responder.Finish(
                 ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, message), 
                 &this->finishFunction);
@@ -109,7 +109,7 @@ void AsyncTransformImpl::setup()
         }
         catch(std::exception &e) {
             auto message = fmt::format("cannot create pipeline: {0}", e.what());
-            logger->error(message);
+            logger->warn(message);
             this->responder.Finish(
                 ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, message), 
                 &this->finishFunction);
@@ -189,7 +189,7 @@ void AsyncTransformImpl::setup()
             if (ok) {
                 if (!this->request.has_payload()) {
                     auto message = "no payload in request message";
-                    logger->error(message);
+                    logger->warn(message);
                     this->responder.Finish(
                         ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, message), &this->finishFunction);
                 }
@@ -199,7 +199,7 @@ void AsyncTransformImpl::setup()
                 for (int i=0; i<payloads.data_size(); i++) {
                     auto data = payloads.data(i);
                     if (pipeline->addData(data.data(), data.size()) == -1) {
-                        logger->error("pipeline returned error adding data");
+                        logger->warn("pipeline returned error adding data");
                         pipelineError = true;
                         break;
                     }
@@ -234,7 +234,7 @@ void AsyncTransformImpl::setup()
             this->logger->trace("writeSampleDoneFunction: done");
         }
         else {
-            this->logger->error("not ok in write");
+            this->logger->warn("not ok in write");
         }
     };
 
@@ -243,7 +243,7 @@ void AsyncTransformImpl::setup()
         if (ok) 
             this->summaryFunction(ok);
         else
-            this->logger->error("writerRemainderDoneFunction: not ok");
+            this->logger->warn("writerRemainderDoneFunction: not ok");
     };
 
     this->summaryFunction = [&] (bool ok) {
@@ -260,7 +260,7 @@ void AsyncTransformImpl::setup()
             this->write(finalResponse, AsyncWriteState::WritingSummary, this->finishSuccessFunction);
         }
         else {
-            this->logger->error("unable to perform flush write");
+            this->logger->warn("unable to perform flush write");
         }
     };
 
